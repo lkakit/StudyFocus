@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
     fontSize: 26,
     color: '#816ACE',
     zIndex: 1,
-    fontFamily: 'Rubik-Medium',
+    fontFamily: 'Rubik-Regular',
   },
   content: {
     flex: 1,

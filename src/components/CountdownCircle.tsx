@@ -7,6 +7,7 @@ import {
   Session, 
   SessionProgress, 
 } from '../types/session.types';
+import { useAlarm } from '../hooks/useAlarm';
 
 const { width, height } = Dimensions.get('window');
 
@@ -20,7 +21,7 @@ const responsiveFontSize = (baseSize: number) => {
 interface CountdownCircleProps {
   sessionConfig: SessionConfig;
   onSessionComplete?: (progress: SessionProgress) => void;
-  onAllSessionsComplete?: () => void;
+  onAllSessionsComplete?: (progress: SessionProgress) => void;
   size?: number;
   strokeWidth?: number;
   color?: string;
@@ -28,7 +29,7 @@ interface CountdownCircleProps {
   textStyle?: any;
 }
 
-// Helper functions outside component
+// Helper functions
 const getInitialSession = (config: SessionConfig): Session => {
   return {
     type: 'work',
@@ -87,18 +88,22 @@ const CountdownCircle: React.FC<CountdownCircleProps> = ({
   strokeWidth = 12,
   color = '#816ACE',
 }) => {
-  // Use useMemo to calculate initial values
   const initialSession = useMemo(() => getInitialSession(sessionConfig), [sessionConfig]);
   
   const [sessionProgress, setSessionProgress] = useState<SessionProgress>(() => ({
     currentSession: initialSession,
     completedRounds: 0,
     isCompleted: false,
+    totalElapsedTime: 0, // Track total time spent across all sessions
+    actualCompletedRounds: 0, // Track only fully completed work sessions
   }));
+  
+  const { triggerAlarm, stopAlarm } = useAlarm();
   
   const [timeLeft, setTimeLeft] = useState(() => initialSession.duration);
   const [isRunning, setIsRunning] = useState(false);
-  const [isTaskCompleted, setIsTaskCompleted] = useState(false);
+  const [sessionStartTime, setSessionStartTime] = useState<number>(0); // Track when current session started
+  const [currentSessionElapsed, setCurrentSessionElapsed] = useState<number>(0); // Time spent in current session
   const intervalRef = useRef<number | null>(null);
 
   const radius = (size - strokeWidth) / 2 * 1.3;
@@ -107,41 +112,64 @@ const CountdownCircle: React.FC<CountdownCircleProps> = ({
   // Calculate progress (0 to 1)
   const progress = timeLeft / sessionProgress.currentSession.duration;
   const strokeDashoffset = circumference * (1 - progress);
-
-  const getSessionColor = () => {
-    switch (sessionProgress.currentSession.type) {
-      case 'work': return '#816ACE';
-      case 'break': return '#4CAF50';
-      case 'longBreak': return '#2196F3';
-      default: return '#816ACE';
-    }
-  };
-
+  
   // Start timer
   const startTimer = () => {
-    if (intervalRef.current || sessionProgress.isCompleted || isTaskCompleted) return;
+    if (intervalRef.current || sessionProgress.isCompleted) return;
+    
+    // Record start time when timer starts
+    if (sessionStartTime === 0) {
+      setSessionStartTime(Date.now());
+    }
     
     intervalRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          handleSessionComplete();
+          handleSessionComplete('natural'); // Natural completion
           return 0;
         }
         return prev - 1;
       });
+      
+      // Update current session elapsed time
+      if (sessionStartTime > 0) {
+        const elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+        setCurrentSessionElapsed(elapsed);
+      }
     }, 1000) as unknown as number;
     
     setIsRunning(true);
   };
 
-  const handleSessionComplete = () => {
+  const handleSessionComplete = (completionType: 'natural' | 'skip') => {
     stopTimer();
+
+    let sessionTimeSpent;
+    let actualElapsed = 0;
+    
+    if (completionType === 'natural') {
+      sessionTimeSpent = sessionProgress.currentSession.duration;
+      triggerAlarm();
+    } else {
+      // Calculate elapsed time
+      if (sessionStartTime > 0) {
+        actualElapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+      }
+      sessionTimeSpent = Math.min(actualElapsed, sessionProgress.currentSession.duration);
+    }
+    
+    const wasWorkSession = sessionProgress.currentSession.type === 'work';
     
     const updatedProgress: SessionProgress = {
       ...sessionProgress,
-      completedRounds: sessionProgress.currentSession.type === 'work' 
+      completedRounds: wasWorkSession 
         ? sessionProgress.completedRounds + 1 
         : sessionProgress.completedRounds,
+      totalElapsedTime: sessionProgress.totalElapsedTime + sessionTimeSpent,
+      // Only count as actual completed round if it was a work session AND completed naturally
+      actualCompletedRounds: wasWorkSession && completionType === 'natural'
+        ? sessionProgress.actualCompletedRounds + 1
+        : sessionProgress.actualCompletedRounds,
     };
 
     const nextSession = getNextSession(sessionProgress.currentSession, sessionConfig);
@@ -150,18 +178,20 @@ const CountdownCircle: React.FC<CountdownCircleProps> = ({
       updatedProgress.currentSession = nextSession;
       setTimeLeft(nextSession.duration);
       setSessionProgress(updatedProgress);
+      // Reset session timing for next session
+      setSessionStartTime(0);
+      setCurrentSessionElapsed(0);
       
       setTimeout(() => {
         onSessionComplete?.(updatedProgress);
       }, 0);
     } else {
-      // All sessions completed - disable everything
       updatedProgress.isCompleted = true;
       setSessionProgress(updatedProgress);
       setTimeLeft(0);
       
       setTimeout(() => {
-        onAllSessionsComplete?.();
+        onAllSessionsComplete?.(updatedProgress); // Pass the progress with timing info
       }, 0);
     }
   };
@@ -177,7 +207,7 @@ const CountdownCircle: React.FC<CountdownCircleProps> = ({
 
   // Toggle play/pause
   const toggleTimer = () => {
-    if (sessionProgress.isCompleted || isTaskCompleted) return;
+    if (sessionProgress.isCompleted) return;
     if (isRunning) {
       stopTimer();
     } else {
@@ -186,20 +216,23 @@ const CountdownCircle: React.FC<CountdownCircleProps> = ({
   };
 
   const resetTimer = () => {
-    if (sessionProgress.isCompleted || isTaskCompleted) return;
+    if (sessionProgress.isCompleted) return;
     stopTimer();
     setTimeLeft(sessionProgress.currentSession.duration);
+    // Reset current session timing but keep total elapsed time
+    setSessionStartTime(0);
+    setCurrentSessionElapsed(0);
   };
 
   // Skip current session
   const skipSession = () => {
-    if (sessionProgress.isCompleted || isTaskCompleted) return;
-    handleSessionComplete();
+    if (sessionProgress.isCompleted) return;
+    handleSessionComplete('skip');
   };
 
   // Handle complete task button press
   const handleCompleteTask = () => {
-    if (sessionProgress.isCompleted || isTaskCompleted) return;
+    if (sessionProgress.isCompleted) return;
 
     Alert.alert(
       "Complete Task",
@@ -212,16 +245,28 @@ const CountdownCircle: React.FC<CountdownCircleProps> = ({
         {
           text: "Yes, Complete",
           onPress: () => {
-            setIsTaskCompleted(true);
             stopTimer();
             setTimeLeft(0);
-            setSessionProgress(prev => ({
-              ...prev,
-              isCompleted: true
-            }));
+
+            // Calculate actual elapsed time for current session
+            let elapsedTime = 0;
+            if (sessionStartTime > 0) {
+              elapsedTime = Math.floor((Date.now() - sessionStartTime) / 1000);
+            }
+            
+            const updatedProgress: SessionProgress = {
+              ...sessionProgress,
+              isCompleted: true,
+              totalElapsedTime: sessionProgress.totalElapsedTime + 
+                Math.min(elapsedTime, sessionProgress.currentSession.duration),
+              // Don't count current session as completed round since it was manually ended
+              actualCompletedRounds: sessionProgress.actualCompletedRounds,
+            };
+            
+            setSessionProgress(updatedProgress);
             
             setTimeout(() => {
-              onAllSessionsComplete?.();
+              onAllSessionsComplete?.(updatedProgress);
             }, 0);
           }
         }
@@ -235,11 +280,12 @@ const CountdownCircle: React.FC<CountdownCircleProps> = ({
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
+      stopAlarm();
     };
   }, []);
 
-  // Disabled state: either all sessions are completed OR task is manually completed
-  const isDisabled = sessionProgress.isCompleted || isTaskCompleted;
+  // Disabled state: when all sessions are completed
+  const isDisabled = sessionProgress.isCompleted;
   const controlColor = isDisabled ? '#A5A5A5' : '#816ACE';
   const playPauseBgColor = isDisabled ? '#A5A5A5' : '#816ACE';
   const completeTaskBgColor = isDisabled ? '#A5A5A5' : '#816ACE';

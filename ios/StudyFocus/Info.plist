@@ -51,9 +51,11 @@
 	<false/>
 	<key>UIAppFonts</key>
 	<array>
+		<string>Rubik-SemiBold.ttf</string>
+		<string>PinyonScript-Regular.ttf</string>
+		<string>Delius-Regular.ttf</string>
 		<string>Rubik-Medium.ttf</string>
 		<string>Rubik-Regular.ttf</string>
-		<string>Rubik-SemiBold.ttf</string>
 	</array>
 </dict>
 </plist>

@@ -1,3 +1,4 @@
+import React, { useState } from 'react';
 import { StatusBar, useColorScheme} from 'react-native';
 import {
   SafeAreaProvider,
@@ -9,11 +10,17 @@ import TasksScreen from './src/screens/TasksScreen.tsx';
 import HistoryScreen from './src/screens/HistoryScreen.tsx';
 import { NavigationContainer } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { HistoryItem } from './src/types/session.types';
 
 const Tab = createBottomTabNavigator();
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+
+  const addHistoryItem = (item: HistoryItem) => {
+    setHistoryItems(prev => [...prev, item]);
+  };
 
   return (
     <SafeAreaProvider>
@@ -21,16 +28,12 @@ function App() {
       <NavigationContainer>
         <Tab.Navigator
           screenOptions={{
-            // Active tab color
-            tabBarActiveTintColor: '#816ACE', // Your purple color
-            // Inactive tab color  
-            tabBarInactiveTintColor: '#A5A5A5', // Gray when not selected
+            tabBarActiveTintColor: '#816ACE',
+            tabBarInactiveTintColor: '#A5A5A5',
           }}
-        
         >
           <Tab.Screen 
             name="Timer" 
-            component={TimerScreen}
             options={{
               headerShown: false,
               title: 'Timer',
@@ -38,7 +41,10 @@ function App() {
                 <Ionicons name="timer-outline" size={size} color={color} />
               ),
             }}
-          />
+          >
+            {(props) => <TimerScreen {...props} addHistoryItem={addHistoryItem} />}
+          </Tab.Screen>
+          
           <Tab.Screen 
             name="Tasks" 
             component={TasksScreen}
@@ -50,9 +56,9 @@ function App() {
               ),
             }}
           />
+          
           <Tab.Screen 
             name="History" 
-            component={HistoryScreen}
             options={{
               headerShown: false,
               title: 'History',
@@ -60,7 +66,14 @@ function App() {
                 <Ionicons name="time-outline" size={size} color={color} />
               ),
             }}
-          />
+          >
+            {() => (
+              <HistoryScreen 
+                historyItems={historyItems} 
+                setHistoryItems={setHistoryItems} 
+              />
+            )}
+          </Tab.Screen>
         </Tab.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

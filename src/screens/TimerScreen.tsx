@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {View, Text, StyleSheet, Dimensions, Platform} from 'react-native';
 import Svg, {Defs, LinearGradient, Rect, Stop} from 'react-native-svg';
 import CountdownCircle from '../components/CountdownCircle';
-import { SessionConfig, SessionProgress } from '../types/session.types';
+import { SessionConfig, SessionProgress, HistoryItem } from '../types/session.types';
+import { RouteProp } from '@react-navigation/native';
 
 const {width, height} = Dimensions.get('window');
 
@@ -13,22 +14,58 @@ const responsiveFontSize = (baseSize: number) => {
   return Math.round(baseSize * scale);
 };
 
-const TimerScreen: React.FC = () => {
-  const [sessionInfo, setSessionInfo] = useState({
-    type: 'work',
-    round: 1,
-    totalRounds: 4
-  });
+interface TimerScreenProps {
+  addHistoryItem: (item: HistoryItem) => void;
+  route: RouteProp<any, any>;
+  navigation: any;
+}
 
-  const [sessionQuote, setSessionQuote] = useState("Stay Focused!");
-
-  const pomodoroConfig: SessionConfig = {
+// When components first mounts
+const getDefaultSessionConfig = (): SessionConfig => {
+  return {
+    taskTitle: "My Task",
     workTime: 25 * 60,
     breakTime: 5 * 60,
     longBreakTime: 15 * 60,
     rounds: 4,
     roundsUntilLongBreak: 4,
+    workflowType: 'pomodoro',
   };
+}
+
+const TimerScreen: React.FC<TimerScreenProps> = ({ addHistoryItem, route }) => {
+  const [sessionConfig, setSessionConfig] = useState<SessionConfig>(getDefaultSessionConfig());
+
+  // First session type (consistent for every workflow type)
+  const [sessionInfo, setSessionInfo] = useState({
+    type: 'Work',
+    round: 1,
+    totalRounds: 4
+  });
+
+  const [sessionQuote, setSessionQuote] = useState("Stay Focused!");
+  
+  // To trigger timer to re-render when starting a new task
+  const [sessionKey, setSessionKey] = useState(Date.now());
+  
+  // Update state when route params change
+  useEffect(() => {
+    if (route.params) {
+      const { sessionConfig: newSessionConfig } = route.params;
+      
+      if (newSessionConfig) {
+        setSessionConfig(newSessionConfig);
+        setSessionInfo({
+          type: 'work',
+          round: 1,
+          totalRounds: newSessionConfig.rounds || 4
+        });
+        setSessionKey(Date.now()); // Trigger timer re-render
+        setSessionQuote("Stay Focused!");
+      }
+    }
+  }, [route.params]);
+
 
   const handleSessionComplete = (progress: SessionProgress) => {
     setSessionInfo({
@@ -44,23 +81,43 @@ const TimerScreen: React.FC = () => {
       longBreak: "Relax and Recharge!"
     };
     setSessionQuote(quotes[progress.currentSession.type]);
-  
   };
 
-  const handleAllSessionsComplete = () => {
+  const getTotalSessionTime = (config: SessionConfig): number => {
+    const totalWorkTime = config.workTime * config.rounds;
+    const totalBreakTime = config.breakTime * (config.rounds - 1);
+    const longBreaks = Math.floor(config.rounds / config.roundsUntilLongBreak);
+    const additionalLongBreakTime = longBreaks * (config.longBreakTime - config.breakTime);
+    
+    return totalWorkTime + totalBreakTime + additionalLongBreakTime;
+  };
+
+  const handleAllSessionsComplete = (progress: SessionProgress) => {
     setSessionQuote("Session completed! 🎉");
-    setSessionInfo(prev => ({
-      ...prev,
-      type: 'completed'
-    }));
-  };
 
+    // Create history item from the completed session
+    const historyItem: HistoryItem = {
+      id: Date.now().toString(), 
+      taskName: sessionConfig.taskTitle, 
+      date: new Date(),
+      duration: progress.totalElapsedTime,
+      completedRounds: progress.completedRounds,
+      totalRounds: progress.currentSession.totalRounds,
+      sessionConfig: sessionConfig,
+      completionPercentage: Math.round((progress.totalElapsedTime / getTotalSessionTime(sessionConfig)) * 100),
+      totalElapsedTime: progress.totalElapsedTime,
+    };
+    
+    // Save to history
+    addHistoryItem(historyItem);
+  };
 
   const getSessionLabel = () => {
     switch (sessionInfo.type) {
       case 'work': return 'Work Session';
       case 'break': return 'Short Break';
       case 'longBreak': return 'Long Break';
+      case 'completed': return 'Session Completed';
       default: return 'Work Session';
     }
   };
@@ -87,16 +144,18 @@ const TimerScreen: React.FC = () => {
       <View style={styles.roundedContainer}>
         <Text style={styles.headerTitle}>Focus Timer</Text>
         <View style={styles.taskTitleContainer}>
-          <Text style={styles.taskTitle}>Math Homework</Text>
+          <Text style={styles.taskTitle}>{sessionConfig.taskTitle}</Text>
         </View>
         <Text style={styles.sessionQuote}>{sessionQuote}</Text>
+        {/* Countdown timer + controls */}
         <CountdownCircle
-          sessionConfig={pomodoroConfig}
-          onSessionComplete={handleSessionComplete}
-          onAllSessionsComplete={handleAllSessionsComplete}
+          sessionConfig={sessionConfig}
+          onSessionComplete={handleSessionComplete} // e.g. work -> break
+          onAllSessionsComplete={handleAllSessionsComplete} // Entire workflow completed (all rounds)
           size={160}
           strokeWidth={14}
           textStyle={styles.timerText}
+          key={sessionKey}
         />
       </View>
       
@@ -105,9 +164,18 @@ const TimerScreen: React.FC = () => {
           {getSessionLabel()} • Round {sessionInfo.round} of {sessionInfo.totalRounds}
         </Text>
         <View style={styles.workflowInfo}>
-          <Text style={styles.tomatoEmoji}>🍅</Text>
-          <Text style={styles.sessionInfo}>Pomodoro</Text>
+          <Text style={styles.tomatoEmoji}>
+            {sessionConfig.workflowType === 'pomodoro' ? '🍅' : 
+            sessionConfig.workflowType === 'university' ? '🎓' :
+            sessionConfig.workflowType === '52-17' ? '⏱️' : '⚙️'}
+          </Text>
+          <Text style={styles.sessionInfo}>
+            {sessionConfig.workflowType === 'pomodoro' ? 'Pomodoro' : 
+            sessionConfig.workflowType === 'university' ? 'University Focus' :
+            sessionConfig.workflowType === '52-17' ? '52/17 Method' : 'Custom'}
+          </Text>
         </View>
+
       </View>
     </View>
   );
@@ -133,10 +201,13 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? responsiveHeight(8) : responsiveHeight(6), // Responsive safe area
   },
   headerTitle: {
-    fontSize: responsiveFontSize(24),
+    position: 'absolute',
+    top: 60,
+    left: 20,
+    fontSize: 26,
     color: '#816ACE',
+    zIndex: 1,
     fontFamily: 'Rubik-Regular',
-    marginBottom: responsiveHeight(4), // Space between header and task title
   },
   taskTitleContainer: {
     alignSelf: 'center', // Or 'center' if you want it centered
@@ -149,6 +220,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    marginTop: responsiveHeight(8),
     marginBottom: responsiveHeight(4), // Space before timer content
     minWidth: responsiveWidth(50), // Minimum 40% of screen width
     maxWidth: responsiveWidth(80),
