@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
-import { StatusBar, useColorScheme} from 'react-native';
-import {
-  SafeAreaProvider,
-} from 'react-native-safe-area-context';
-import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
-
-import TimerScreen from './src/screens/TimerScreen.tsx';
-import TasksScreen from './src/screens/TasksScreen.tsx';
-import HistoryScreen from './src/screens/HistoryScreen.tsx';
+import { StatusBar, useColorScheme } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+
+import TimerScreen from './src/screens/TimerScreen';
+import TasksScreen from './src/screens/TasksScreen';
+import HistoryScreen from './src/screens/HistoryScreen';
 import { HistoryItem } from './src/types/session.types';
 
 const Tab = createBottomTabNavigator();
@@ -19,7 +17,8 @@ function App() {
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
 
   const addHistoryItem = (item: HistoryItem) => {
-    setHistoryItems(prev => [...prev, item]);
+    // newest first
+    setHistoryItems(prev => [item, ...prev]);
   };
 
   return (
@@ -27,53 +26,46 @@ function App() {
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
       <NavigationContainer>
         <Tab.Navigator
-          screenOptions={{
+          screenOptions={({ route }) => ({
+            headerShown: false,
             tabBarActiveTintColor: '#816ACE',
-            tabBarInactiveTintColor: '#A5A5A5',
-          }}
+            tabBarInactiveTintColor: '#A7A7A7',
+            tabBarIcon: ({ color, size }) => {
+              if (route.name === 'Timer') {
+                return <Ionicons name="timer-outline" size={size} color={color} />;
+              }
+              if (route.name === 'Tasks') {
+                return <Ionicons name="list-outline" size={size} color={color} />;
+              }
+              return <Ionicons name="time-outline" size={size} color={color} />;
+            },
+          })}
         >
-          <Tab.Screen 
-            name="Timer" 
-            options={{
-              headerShown: false,
-              title: 'Timer',
-              tabBarIcon: ({ color, size }) => (
-                <Ionicons name="timer-outline" size={size} color={color} />
-              ),
-            }}
-          >
-            {(props) => <TimerScreen {...props} addHistoryItem={addHistoryItem} />}
-          </Tab.Screen>
-          
-          <Tab.Screen 
-            name="Tasks" 
-            component={TasksScreen}
-            options={{
-              headerShown: false,
-              title: 'Tasks',
-              tabBarIcon: ({ color, size }) => (
-                <Ionicons name="list-outline" size={size} color={color} />
-              ),
-            }}
-          />
-          
-          <Tab.Screen 
-            name="History" 
-            options={{
-              headerShown: false,
-              title: 'History',
-              tabBarIcon: ({ color, size }) => (
-                <Ionicons name="time-outline" size={size} color={color} />
-              ),
-            }}
-          >
-            {() => (
-              <HistoryScreen 
-                historyItems={historyItems} 
-                setHistoryItems={setHistoryItems} 
+          <Tab.Screen
+            name="Timer"
+            children={props => (
+              <TimerScreen
+                {...props}
+                addHistoryItem={addHistoryItem}
               />
             )}
-          </Tab.Screen>
+          />
+
+          <Tab.Screen
+            name="Tasks"
+            component={TasksScreen}
+          />
+
+          <Tab.Screen
+            name="History"
+            children={props => (
+              <HistoryScreen
+                {...props}
+                historyItems={historyItems}
+                setHistoryItems={setHistoryItems}
+              />
+            )}
+          />
         </Tab.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { WorkflowType } from '../types/session.types';
+import { WorkflowType, SessionConfig } from '../types/session.types';
 
 const { width, height } = Dimensions.get('window');
 
@@ -33,16 +33,6 @@ interface Workflow {
   breakMinutes: number;
   longBreakMinutes: number;
   longBreakEvery: number;
-}
-
-interface SessionConfig {
-  workflowType: WorkflowType;
-  taskTitle: string;
-  studyMinutes: number;
-  breakMinutes: number;
-  longBreakMinutes: number;
-  longBreakEvery: number;
-  rounds: number;
 }
 
 const TimerScreen: React.FC = () => {
@@ -157,20 +147,31 @@ const TimerScreen: React.FC = () => {
       return;
     }
 
+    // Convert minutes → seconds
+    const workMinutes =
+      selectedWorkflow.type === 'custom'
+        ? Number(customStudy) || 0
+        : selectedWorkflow.studyMinutes;
+
+    const breakMinutes =
+      selectedWorkflow.type === 'custom'
+        ? Number(customBreak) || 0
+        : selectedWorkflow.breakMinutes;
+
     const sessionConfig: SessionConfig = {
-      workflowType: selectedWorkflow.type,
       taskTitle: taskInput.trim(),
-      studyMinutes: effectiveStudy,
-      breakMinutes: effectiveBreak,
-      longBreakMinutes: selectedWorkflow.longBreakMinutes,
-      longBreakEvery: selectedWorkflow.longBreakEvery,
+      workTime: workMinutes * 60,
+      breakTime: breakMinutes * 60,
+      longBreakTime: selectedWorkflow.longBreakMinutes * 60,
       rounds,
+      roundsUntilLongBreak: selectedWorkflow.longBreakEvery,
+      workflowType: selectedWorkflow.type,
     };
 
-    navigation.navigate('Timer', {
-      sessionConfig,
-    });
+    // Navigate to Timer tab with config
+    navigation.navigate('Timer', { sessionConfig });
 
+    // Reset local UI state
     setTaskInput('');
     setSelectedWorkflow(null);
     setShowTaskModal(false);
