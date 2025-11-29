@@ -70,8 +70,8 @@ const TimerScreen: React.FC = () => {
       color: '#9C6BA3',
       studyMinutes: 50,
       breakMinutes: 10,
-      longBreakMinutes: 20,
-      longBreakEvery: 3,
+      longBreakMinutes: 0,
+      longBreakEvery: 999,
     },
     {
       type: '52-17',
@@ -94,8 +94,8 @@ const TimerScreen: React.FC = () => {
       color: '#9C6BA3',
       studyMinutes: 25,
       breakMinutes: 5,
-      longBreakMinutes: 20,
-      longBreakEvery: 4,
+      longBreakMinutes: 0,
+      longBreakEvery: 999,
     },
   ];
 
